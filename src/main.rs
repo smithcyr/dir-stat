@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::MAIN_SEPARATOR;
 use structopt::StructOpt;
 
 use dir_stat::walk::process_dir;
@@ -38,7 +39,7 @@ fn main() -> Result<(), String> {
     });
 
     for entry in entries {
-        println!("{path} {size}", path = entry.0, size = entry.1.size);
+        println!("{path}{dir} {size}", path = entry.0, size = entry.1.size, dir = if entry.1.node_type == NodeType::Directory { MAIN_SEPARATOR.into() } else { String::new() });
     }
     return Result::Ok(());
 }
