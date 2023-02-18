@@ -2,9 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 
 use crate::process_directory::{process_directory};
-use crate::types::{NodeId, NodeResult, NodeType};
-
-type ScanResult = HashMap<String, NodeResult>;
+use crate::types::{NodeId, NodeResult, NodeType, ScanResult};
 
 pub fn process_dir(root_path_str: String) -> ScanResult {
     // set of processed inode ids
@@ -20,14 +18,23 @@ pub fn process_dir(root_path_str: String) -> ScanResult {
     
 
     // result to be analized and displayed
-    let mut result: ScanResult = HashMap::new();
+    let mut scan: ScanResult = ScanResult {
+        result: HashMap::new(),
+        double_count: HashMap::new(),
+    };
 
     loop {
         let next_dir = dir_queue.pop_front();
         match next_dir {
             None => break,
             Some(directory_path) => {
-                let directory_result = process_directory(&directory_path);
+                let directory_result = match process_directory(&directory_path) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        // TODO: handle access errors
+                        continue;
+                    }
+                };
 
                 let mut unprocessed_directories: VecDeque<String> = VecDeque::new();
                 for directory in directory_result.directories {
@@ -43,7 +50,15 @@ pub fn process_dir(root_path_str: String) -> ScanResult {
                     if !processed_inode_ids.contains(&file.node.id) {
                         processed_inode_ids.insert(file.node.id);
                         directory_size += file.size;
-                        result.insert(
+                        scan.result.insert(
+                            file.node.path,
+                            NodeResult {
+                                size: file.size,
+                                node_type: NodeType::File,
+                            },
+                        );
+                    } else {
+                        scan.double_count.insert(
                             file.node.path,
                             NodeResult {
                                 size: file.size,
@@ -58,12 +73,12 @@ pub fn process_dir(root_path_str: String) -> ScanResult {
                     .ancestors()
                     .map(|ancestor| String::from(ancestor.to_str().unwrap()))
                 {
-                    match result.get_mut(&ancestor) {
+                    match scan.result.get_mut(&ancestor) {
                         Some(node) => {
                             node.size += directory_size;
                         }
                         None => {
-                            result.insert(
+                            scan.result.insert(
                                 ancestor.clone(),
                                 NodeResult {
                                     size: directory_size,
@@ -82,5 +97,5 @@ pub fn process_dir(root_path_str: String) -> ScanResult {
         }
     }
 
-    result
+    scan
 }

@@ -4,9 +4,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
 use crate::process_directory::{process_directory};
-use crate::types::{NodeResult, NodeId, NodeType};
-
-type ScanResult = HashMap<String, NodeResult>;
+use crate::types::{NodeResult, NodeId, NodeType, ScanResult};
 
 // TODO: need to determine if threaded directory walk is faster might actually be slower
 const THREAD_COUNT: u8 = 3; 
@@ -26,7 +24,10 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
     let dir_queue: Arc<RwLock<VecDeque<String>>> = Arc::new(RwLock::new(VecDeque::new()));
 
     // result to be analized and displayed
-    let result: Arc<Mutex<ScanResult>> = Arc::new(Mutex::new(HashMap::new()));
+    let scan: Arc<Mutex<ScanResult>> = Arc::new(Mutex::new(ScanResult {
+        result: HashMap::new(),
+        double_count: HashMap::new(),
+    }));
 
     // recursive iteration of all files/directories starting with root directory
 
@@ -43,7 +44,7 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
         let current_running_nodes_arc = Arc::clone(&current_running_nodes);
         let dir_queue_arc = Arc::clone(&dir_queue);
         let processed_inode_ids_arc = Arc::clone(&processed_inode_ids);
-        let result_arc = Arc::clone(&result);
+        let scan_arc = Arc::clone(&scan);
         children.push(thread::spawn(move || {
             loop {
                 let other_running_nodes = *current_running_nodes_arc.read().unwrap();
@@ -59,7 +60,13 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
                         let mut running_nodes = current_running_nodes_arc.write().unwrap();
                         *running_nodes += 1;
 
-                        let directory_result = process_directory(&directory_path);
+                        let directory_result = match process_directory(&directory_path) {
+                            Ok(r) => r,
+                            Err(_) => {
+                                // TODO: handle access errors
+                                continue;
+                            }
+                        };
 
                         let mut unprocessed_directories: VecDeque<String> = VecDeque::new();
                         for directory in directory_result.directories {
@@ -76,7 +83,7 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
                             .unwrap()
                             .append(&mut unprocessed_directories);
 
-                        let mut result_write = result_arc.lock().unwrap();
+                        let mut scan_write = scan_arc.lock().unwrap();
                         let mut directory_size: u128 = 0;
                         for file in directory_result.files {
                             if !processed_inode_ids_arc
@@ -88,7 +95,7 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
                                     .write()
                                     .unwrap()
                                     .insert(file.node.id);
-                                result_write.insert(
+                                scan_write.result.insert(
                                     file.node.path,
                                     NodeResult {
                                         size: file.size,
@@ -96,6 +103,14 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
                                     },
                                 );
                                 directory_size += file.size;
+                            } else {
+                                scan_write.double_count.insert(
+                                    file.node.path,
+                                    NodeResult {
+                                        size: file.size,
+                                        node_type: NodeType::File,
+                                    },
+                                );
                             }
                         }
 
@@ -104,12 +119,12 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
                             .ancestors()
                             .map(|ancestor| String::from(ancestor.to_str().unwrap()))
                         {
-                            match result_write.get_mut(&ancestor) {
+                            match scan_write.result.get_mut(&ancestor) {
                                 Some(node) => {
                                     node.size += directory_size;
                                 }
                                 None => {
-                                    result_write.insert(
+                                    scan_write.result.insert(
                                         ancestor,
                                         NodeResult {
                                             size: directory_size,
@@ -133,5 +148,5 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
         let _ = child.join().unwrap();
     }
 
-    return Arc::try_unwrap(result).unwrap().into_inner().unwrap();
+    return Arc::try_unwrap(scan).unwrap().into_inner().unwrap();
 }

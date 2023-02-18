@@ -1,18 +1,22 @@
 use std::os::macos::fs::MetadataExt;
 use std::fs;
 
-use crate::types::{DirectoryInfo, DirectoryResult, FileInfo, NodeInfo};
+use crate::types::{DirectoryInfo, DirectoryResult, FileInfo, NodeInfo, SymLinkInfo};
 
-pub fn process_directory(directory_path: &String) -> DirectoryResult {
+pub fn process_directory(directory_path: &String) -> std::io::Result<DirectoryResult> {
     let mut directories: Vec<DirectoryInfo> = Vec::new();
     let mut files: Vec<FileInfo> = Vec::new();
-    for file in fs::read_dir(directory_path).unwrap() {
+    let mut sym_links: Vec<SymLinkInfo> = Vec::new();
+    for file in fs::read_dir(directory_path)? {
         let path = file.unwrap().path();
         let path_str = path.to_str().unwrap();
         let sym_meta = fs::symlink_metadata(path_str).unwrap();
 
         // if the node is a symlink then ignore it
         if sym_meta.file_type().is_symlink() {
+            sym_links.push(SymLinkInfo {
+                path: String::from(path_str)
+            });
             continue;
         }
         let metadata = fs::metadata(path_str).unwrap();
@@ -31,5 +35,5 @@ pub fn process_directory(directory_path: &String) -> DirectoryResult {
             directories.push(DirectoryInfo { node });
         }
     }
-    DirectoryResult { files, directories }
+    Ok(DirectoryResult { files, directories, sym_links })
 }

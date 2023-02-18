@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 pub type NodeId = (u64, u64);
 
 pub struct NodeInfo {
@@ -5,6 +7,10 @@ pub struct NodeInfo {
 
     // tuple of mount id and node id to uniquely identify a file
     pub id: NodeId,
+}
+
+pub struct SymLinkInfo {
+    pub path: String,
 }
 
 pub struct FileInfo {
@@ -35,4 +41,13 @@ pub struct NodeResult {
 pub struct DirectoryResult {
     pub files: Vec<FileInfo>,
     pub directories: Vec<DirectoryInfo>,
+    pub sym_links: Vec<SymLinkInfo>,
+}
+
+pub type DirectoryScanResult = HashMap<String, NodeResult>;
+
+#[derive(Debug)]
+pub struct ScanResult {
+    pub result: DirectoryScanResult,
+    pub double_count: DirectoryScanResult,
 }
