@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 
-use crate::process_directory::{process_directory};
+use crate::process_directory::process_directory;
 use crate::types::{NodeId, NodeResult, NodeType, ScanResult};
 
 pub fn process_dir(root_path_str: String) -> ScanResult {
