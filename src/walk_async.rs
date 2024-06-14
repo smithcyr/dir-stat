@@ -3,13 +3,10 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
-use crate::process_directory::{process_directory};
+use crate::process_directory::process_directory;
 use crate::types::{NodeResult, NodeId, NodeType, ScanResult};
 
-// TODO: need to determine if threaded directory walk is faster might actually be slower
-const THREAD_COUNT: u8 = 3; 
-
-pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
+pub fn process_dir_threaded(root_path_str: String, threads: u8) -> ScanResult {
     // number of currently processing nodes
     // (this value will be used in threads when waiting for completion of traversal)
     let current_running_nodes = Arc::new(RwLock::new(0));
@@ -23,7 +20,7 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
     // queue of nodes to process
     let dir_queue: Arc<RwLock<VecDeque<String>>> = Arc::new(RwLock::new(VecDeque::new()));
 
-    // result to be analized and displayed
+    // result to be displayed
     let scan: Arc<Mutex<ScanResult>> = Arc::new(Mutex::new(ScanResult {
         result: HashMap::new(),
         double_count: HashMap::new(),
@@ -40,7 +37,7 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
     // start n threads of node process
     let mut children = vec![];
 
-    for _ in 1..THREAD_COUNT {
+    for _ in 1..threads {
         let current_running_nodes_arc = Arc::clone(&current_running_nodes);
         let dir_queue_arc = Arc::clone(&dir_queue);
         let processed_inode_ids_arc = Arc::clone(&processed_inode_ids);
@@ -57,13 +54,13 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
                         }
                     }
                     Some(directory_path) => {
-                        let mut running_nodes = current_running_nodes_arc.write().unwrap();
-                        *running_nodes += 1;
+                        *current_running_nodes_arc.write().unwrap() += 1;
 
                         let directory_result = match process_directory(&directory_path) {
                             Ok(r) => r,
                             Err(_) => {
                                 // TODO: handle access errors
+                                *current_running_nodes_arc.write().unwrap() -= 1;
                                 continue;
                             }
                         };
@@ -135,8 +132,7 @@ pub fn process_dir_threaded(root_path_str: String) -> ScanResult {
                             }
                         }
 
-                        let mut running_nodes = current_running_nodes_arc.write().unwrap();
-                        *running_nodes -= 1;
+                        *current_running_nodes_arc.write().unwrap() -= 1;
                     }
                 }
             }

@@ -1,10 +1,12 @@
 pub mod utils;
 
 use std::fs;
+use std::time::Instant;
 use std::path::MAIN_SEPARATOR;
 use structopt::StructOpt;
 
 use dir_stat::walk::process_dir;
+use dir_stat::walk_async::process_dir_threaded;
 use dir_stat::types::NodeType;
 use crate::utils::to_decimal_prefix;
 
@@ -21,9 +23,14 @@ struct Opt {
     /// show total size of multiple-referenced files
     #[structopt(long)]
     hardlinks: bool,
+
+    /// number of threads to use
+    #[structopt(long, default_value = "1")]
+    threads: u8
 }
 
 fn main() -> Result<(), String> {
+    let start = Instant::now();
     let opt = Opt::from_args();
 
     let path = opt.path;
@@ -35,8 +42,12 @@ fn main() -> Result<(), String> {
         // do not proceed if targetting a non-directory
         return Result::Err(String::from("Root path is not a directory."));
     }
+    let scan = if opt.threads > 1 {
+        process_dir_threaded(root_path_str, opt.threads)
+    } else {
+        process_dir(root_path_str)
+    };
 
-    let scan = process_dir(root_path_str);
     let mut entries: Vec<(&_, &_)> = scan.result.iter().collect();
     entries.sort_by(|a, b| {
         if a.1.node_type != b.1.node_type {
@@ -48,6 +59,8 @@ fn main() -> Result<(), String> {
         }
         b.1.size.cmp(&a.1.size)
     });
+
+    println!("Runtime: {duration:.2?}", duration=start.elapsed());
 
     let mut count = 0;
     for entry in entries {
