@@ -2,6 +2,7 @@ use std::os::macos::fs::MetadataExt;
 use std::fs;
 
 use crate::types::{DirectoryInfo, DirectoryResult, FileInfo, NodeInfo, SymLinkInfo};
+use crate::file_size::file_size;
 
 pub fn process_directory(directory_path: &String) -> std::io::Result<DirectoryResult> {
     let mut directories: Vec<DirectoryInfo> = Vec::new();
@@ -28,7 +29,7 @@ pub fn process_directory(directory_path: &String) -> std::io::Result<DirectoryRe
         // if the node is a file then add a NodeInfo under its path to the result with file size
         if sym_meta.is_file() {
             files.push(FileInfo {
-                size: sym_meta.st_size().into(),
+                size: file_size(&sym_meta),
                 node,
             });
         } else if sym_meta.is_dir() {
