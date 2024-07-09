@@ -35,11 +35,11 @@ fn main() -> Result<(), String> {
 
     let path = opt.path;
     let canonicalized_path = fs::canonicalize(path).expect("Failed to canonalize path");
+    // follow symlink to root path
     let root_path_str = String::from(canonicalized_path.to_str().unwrap());
     let path_metadata = fs::metadata(canonicalized_path).expect("Failed to access path metadata");
-    // follow symlink to root path
     if !path_metadata.is_dir() {
-        // do not proceed if targetting a non-directory
+        // do not proceed if targeting a non-directory
         return Result::Err(String::from("Root path is not a directory."));
     }
     let scan = if opt.threads > 1 {
@@ -48,6 +48,7 @@ fn main() -> Result<(), String> {
         process_dir(root_path_str)
     };
 
+    // by default list the largest files first  
     let mut entries: Vec<(&_, &_)> = scan.result.iter().collect();
     entries.sort_by(|a, b| {
         if a.1.node_type != b.1.node_type {
@@ -60,6 +61,7 @@ fn main() -> Result<(), String> {
         b.1.size.cmp(&a.1.size)
     });
 
+    // benchmarking -- for me the optimal number of threads to use is 8
     println!("Runtime: {duration:.2?}", duration=start.elapsed());
 
     let mut count = 0;
