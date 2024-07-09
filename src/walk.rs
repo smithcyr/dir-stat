@@ -16,8 +16,7 @@ pub fn process_dir(root_path_str: String) -> ScanResult {
     let mut dir_queue: VecDeque<String> = VecDeque::new();
     dir_queue.push_front(root_path_str);
     
-
-    // result to be analized and displayed
+    // result to be analyzed and displayed
     let mut scan: ScanResult = ScanResult {
         result: HashMap::new(),
         double_count: HashMap::new(),
